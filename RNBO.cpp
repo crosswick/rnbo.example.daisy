@@ -54,9 +54,29 @@ MidiUsbHandler midi;
 
 RNBO::rnbomatic<> rnbo;
 
+// CPU load monitoring
+CpuLoadMeter cpuLoadMeter;
+static uint32_t lastCpuLoadTime = 0;
+static const uint32_t CPU_LOAD_INTERVAL_MS = 100; // Send CPU load every 100ms
+
 // just an axample of how to control a named parameter
 long Param1Index = -1;			  // this we will find out later
 const char *Param1Name = "level"; // just an arbitrary name for the sake of this demo
+
+// Function to send CPU load as MIDI CC 16
+void SendCpuLoadAsMidi()
+{
+    // Get the current CPU load and scale to 0-100
+    float cpuLoad = cpuLoadMeter.GetAvgCpuLoad();
+    uint8_t ccValue = (uint8_t)(cpuLoad * 100.0f);
+    
+    // Clamp the value to 0-100 range
+    if (ccValue > 100) ccValue = 100;
+    
+    // Send MIDI CC 16 (0xB0 + channel 0, CC 16, value)
+    uint8_t midiData[3] = {0xB0, 16, ccValue};
+    midi.SendMessage(midiData, 3);
+}
 
 // Typical Switch case for Message Type.
 void HandleMidiMessage(MidiEvent m)
@@ -100,6 +120,9 @@ void HandleMidiMessage(MidiEvent m)
 
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
+	// Start CPU load measurement
+	cpuLoadMeter.OnBlockStart();
+	
 	hw.ProcessAllControls();
 	while (midi.HasEvents())
 	{
@@ -122,6 +145,17 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 	}
 
 	rnbo.process(in, 2, out, 2, vectorsize);
+	
+	// End CPU load measurement
+	cpuLoadMeter.OnBlockEnd();
+	
+	// Check if it's time to send CPU load (every 100ms)
+	uint32_t currentTime = System::GetTick();
+	if (currentTime - lastCpuLoadTime >= CPU_LOAD_INTERVAL_MS)
+	{
+		SendCpuLoadAsMidi();
+		lastCpuLoadTime = currentTime;
+	}
 }
 
 int main(void)
@@ -138,6 +172,9 @@ int main(void)
 	MidiUsbHandler::Config midi_cfg;
 	midi_cfg.transport_config.periph = MidiUsbTransport::Config::INTERNAL;
 	midi.Init(midi_cfg);
+
+	// initialize CPU load monitoring
+	cpuLoadMeter.Init(hw.AudioSampleRate(), hw.AudioBlockSize());
 
 	// initialize RNBO, here for example audio samples are allocated in the SDRAM (through our allocator)
 	rnbo.initialize();
