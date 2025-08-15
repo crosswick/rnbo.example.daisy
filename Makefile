@@ -8,7 +8,7 @@ CPP_SOURCES = RNBO.cpp
 # Library Locations
 LIBDAISY_DIR = 3rdparty/libDaisy
 
-APP_TYPE = BOOT_SRAM
+APP_TYPE = BOOT_QSPI
 
 # Core location, and generic Makefile.
 SYSTEM_FILES_DIR = $(LIBDAISY_DIR)/core
