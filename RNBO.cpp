@@ -71,10 +71,10 @@ SdmmcHandler   sdcard;
 FatFSInterface fsi;
 
 RNBO::rnbomatic<> rnbo;
-static constexpr int kDataRefIndex = 1;
 static constexpr uint32_t kSampleRateHz = 48000;
-static constexpr size_t kBlockSize = 128;
+static constexpr size_t kBlockSize = 64; // match upstream RNBO example default
 static constexpr size_t kMaxNameLen = 128;
+static int gDataRefIndex = -1; // selected at runtime based on RNBO data ref file
 
 
 void HandleMidiMessage(const MidiEvent& m)
@@ -103,7 +103,8 @@ void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, s
 {
 	// Keep audio callback lean: measure CPU and process RNBO only
 	cpuMeter.OnBlockStart();
-	rnbo.process(in, 2, out, 2, size);
+	(void)size; // process with fixed vectorsize per RNBO example
+	rnbo.process(in, 2, out, 2, kBlockSize);
 	cpuMeter.OnBlockEnd();
 }
 
@@ -239,8 +240,18 @@ int main(void)
 	hw.StartAudio(AudioCallback);
 
 	// Resolve RNBO buffer~ file (basename only) and begin async loading
-	const RNBO::DataRef* dr = rnbo.getDataRef(kDataRefIndex);
-	const char* requested = dr && dr->getFile() ? dr->getFile() : nullptr;
+	// Auto-detect the first DataRef that has a non-empty file set by the patch
+	const RNBO::DataRef* dr = nullptr;
+	const char* requested = nullptr;
+	for (int i = 0; i < 8; ++i) {
+		const RNBO::DataRef* d = rnbo.getDataRef(i);
+		if (d && d->getFile() && d->getFile()[0]) {
+			gDataRefIndex = i;
+			dr = d;
+			requested = d->getFile();
+			break;
+		}
+	}
 	if (requested && requested[0]) {
 		// Extract basename using strrchr
 		const char* slash = strrchr(requested, '/');
@@ -278,7 +289,7 @@ int main(void)
 			g_loader.Step();
 			if (g_loader.done && !g_loader.failed && g_loader.buf) {
 				// Bind planar float32 audio directly to RNBO DataRef 1
-				RNBO::DataRef* ref = rnbo.getDataRef(kDataRefIndex);
+				RNBO::DataRef* ref = (gDataRefIndex >= 0) ? rnbo.getDataRef(gDataRefIndex) : nullptr;
 				if (ref) {
 					RNBO::DataType dt;
 					dt.type = RNBO::DataType::Float32AudioBuffer;
@@ -287,7 +298,8 @@ int main(void)
 					ref->setType(dt);
 					const size_t bytes = g_loader.frames * (size_t)g_loader.channels * sizeof(float);
 					ref->setData(reinterpret_cast<char*>(g_loader.buf), bytes, true);
-					rnbo.processDataViewUpdate(kDataRefIndex, RNBO::RNBOTimeNow);
+					if (gDataRefIndex >= 0)
+						rnbo.processDataViewUpdate(gDataRefIndex, RNBO::RNBOTimeNow);
 					g_loader.buf = nullptr; // ownership transferred
 				}
 			}
