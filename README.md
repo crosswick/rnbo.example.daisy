@@ -99,6 +99,14 @@ and then:
 
     task build_and_program_dfu
 
+### One-click build and DFU (recommended)
+
+This workspace also provides a convenience task that builds in Debug and waits for a DFU device before flashing:
+
+    task build_then_program_dfu_wait
+
+Put the Seed in DFU mode (hold BOOT, tap RESET) and run the task.
+
 
 ## MIDI
 
@@ -110,3 +118,22 @@ This example should advertise a MIDI port named something like: _Daisy Seed Buil
 in general the Daisy forums are a great source of information - i found this one especially helpful:
 
 https://forum.electro-smith.com/t/out-of-flash-memory-walkthrough-with-samples/4370
+
+## Runtime behavior and sample loading
+
+- Audio runs at 48 kHz with a fixed block size of 64 samples (stereo).
+- On boot, the firmware auto-detects the first RNBO DataRef whose file string is set by your patch (e.g., buffer~ file).
+- The basename of that file is used to open a WAV from the SD card root. Subfolders are not supported.
+- Supported sample format: WAV PCM16 LE, mono or stereo. Other formats are not loaded.
+- The file is loaded asynchronously after audio starts; when finished, the decoded planar float32 buffer is bound to the RNBO DataRef.
+
+### Debug telemetry via MIDI CC (Channel 1)
+
+- CC16: CPU load (0–127)
+- CC17: Loader progress during file load (0–127)
+- CC20: Heartbeat at 2 Hz toggling 0/127
+
+Tips:
+
+- If you don’t hear the sample: ensure the exact filename (case-sensitive) exists on the SD card root and is a PCM16 WAV. While loading, CC17 should move from 0→127.
+- To change the sample, set the buffer~ file in your RNBO patch; no firmware edit is needed.
