@@ -108,35 +108,21 @@
 			],
 			"type": "shell"
 		},
+		
 		{
-			"label": "build_then_program_dfu_wait",
+			"label": "build_clean_then_wait_and_program_dfu",
 			"type": "shell",
-			"command": "echo build_then_program_dfu_wait",
-			"problemMatcher": [],
-			"dependsOn": [
-				"build_all_debug",
-				"program-dfu-wait"
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"command": "make clean; make; echo 'Waiting for DFU device (hold BOOT, tap RESET)…'; while ! dfu-util -l 2>&1 | grep -q 'Found DFU:.*0483:df11'; do sleep 0.5; done; echo 'DFU device found'; make program-dfu",
+			"problemMatcher": [
+				"$gcc"
 			],
-			"dependsOrder": "sequence"
-		},
-		{
-			"label": "build_then_program_dfu_wait",
-			"type": "shell",
-			"command": "echo 'Waiting for DFU device (hold BOOT, tap RESET)…'; while ! dfu-util -l 2>&1 | grep -q 'Found DFU:.*0483:df11'; do sleep 0.5; done; echo 'DFU device found'; make program-dfu",
-			"isBackground": false,
-			"group": "build"
-		},
-		{
-			"label": "build_then_program_dfu_wait",
-			"type": "shell",
-			"command": "echo 'Waiting for DFU device (hold BOOT, tap RESET)…'; while ! dfu-util -l 2>&1 | grep -q 'Found DFU:.*0483:df11'; do sleep 0.5; done; echo 'DFU device found'; make clean; DEBUG=1 make; make program-dfu",
-			"isBackground": false
-		},
-		{
-			"label": "build_then_program_dfu_wait",
-			"type": "shell",
-			"command": "echo 'Waiting for DFU device (hold BOOT, tap RESET)…'; while ! dfu-util -l 2>&1 | grep -q 'Found DFU:.*0483:df11'; do sleep 0.5; done; echo 'DFU device found'; make clean; DEBUG=1 make; make program-dfu",
-			"isBackground": false
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
 		}
 	],
 	"version": "2.0.0"
