@@ -1,93 +1,143 @@
 {
-  "tasks": [
-    {
-      "command": "make clean; make",
-      "group": {
-        "isDefault": true,
-        "kind": "build"
-      },
-      "label": "build",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [
-        "$gcc"
-      ],
-      "type": "shell"
-    },
-    {
-      "command": "make clean; make; make program",
-      "label": "build_and_program",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [
-        "$gcc"
-      ],
-      "type": "shell"
-    },
-    {
-      "command": "make clean; DEBUG=1 make; make program-dfu",
-      "label": "build_and_program_dfu",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [
-        "$gcc"
-      ],
-      "type": "shell"
-    },
-    {
-      "command": "make clean;make",
-      "dependsOn": [
-        "build_libdaisy"
-      ],
-      "label": "build_all",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [
-        "$gcc"
-      ],
-      "type": "shell"
-    },
-    {
-      "command": "make clean;DEBUG=1 make",
-      "dependsOn": [
-        "build_libdaisy"
-      ],
-      "label": "build_all_debug",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [
-        "$gcc"
-      ],
-      "type": "shell"
-    },
-    {
-      "command": "make program-dfu",
-      "label": "program-dfu",
-      "problemMatcher": [],
-      "type": "shell"
-    },
-    {
-      "command": "make program",
-      "label": "program",
-      "problemMatcher": [],
-      "type": "shell"
-    },
-    {
-      "command": "make",
-      "label": "build_libdaisy",
-      "options": {
-        "cwd": "${workspaceFolder}/3rdparty/libDaisy/"
-      },
-      "problemMatcher": [
-        "$gcc"
-      ],
-      "type": "shell"
-    }
-  ],
-  "version": "2.0.0"
+	"tasks": [
+		{
+			"command": "make clean; make",
+			"group": {
+				"isDefault": true,
+				"kind": "build"
+			},
+			"label": "build",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"type": "shell"
+		},
+		{
+			"command": "make clean; make; make program",
+			"label": "build_and_program",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"type": "shell"
+		},
+		{
+			"command": "make clean; DEBUG=1 make; make program-dfu",
+			"label": "build_and_program_dfu",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"type": "shell"
+		},
+		{
+			"command": "make clean;make",
+			"dependsOn": [
+				"build_libdaisy"
+			],
+			"label": "build_all",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"type": "shell"
+		},
+		{
+			"command": "make clean;DEBUG=1 make",
+			"dependsOn": [
+				"build_libdaisy"
+			],
+			"label": "build_all_debug",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"type": "shell"
+		},
+		{
+			"command": "make program-dfu",
+			"label": "program-dfu",
+			"problemMatcher": [],
+			"type": "shell"
+		},
+		{
+			"label": "program-dfu-wait",
+			"type": "shell",
+			"problemMatcher": [],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"command": "echo 'Waiting for DFU device (hold BOOT, tap RESET)…'; while ! dfu-util -l 2>&1 | grep -q 'Found DFU:.*0483:df11'; do sleep 0.5; done; echo 'DFU device found'; make program-dfu"
+		},
+		{
+			"label": "build_then_program_dfu_wait",
+			"type": "shell",
+			"command": "echo build_then_program_dfu_wait",
+			"problemMatcher": [],
+			"dependsOn": [
+				"build_all_debug",
+				"program-dfu-wait"
+			],
+			"dependsOrder": "sequence"
+		},
+		{
+			"command": "make program",
+			"label": "program",
+			"problemMatcher": [],
+			"type": "shell"
+		},
+		{
+			"command": "make",
+			"label": "build_libdaisy",
+			"options": {
+				"cwd": "${workspaceFolder}/3rdparty/libDaisy/"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"type": "shell"
+		},
+		{
+			"label": "build_then_program_dfu_wait",
+			"type": "shell",
+			"command": "echo build_then_program_dfu_wait",
+			"problemMatcher": [],
+			"dependsOn": [
+				"build_all_debug",
+				"program-dfu-wait"
+			],
+			"dependsOrder": "sequence"
+		},
+		{
+			"label": "build_then_program_dfu_wait",
+			"type": "shell",
+			"command": "echo 'Waiting for DFU device (hold BOOT, tap RESET)…'; while ! dfu-util -l 2>&1 | grep -q 'Found DFU:.*0483:df11'; do sleep 0.5; done; echo 'DFU device found'; make program-dfu",
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "build_then_program_dfu_wait",
+			"type": "shell",
+			"command": "echo 'Waiting for DFU device (hold BOOT, tap RESET)…'; while ! dfu-util -l 2>&1 | grep -q 'Found DFU:.*0483:df11'; do sleep 0.5; done; echo 'DFU device found'; make clean; DEBUG=1 make; make program-dfu",
+			"isBackground": false
+		},
+		{
+			"label": "build_then_program_dfu_wait",
+			"type": "shell",
+			"command": "echo 'Waiting for DFU device (hold BOOT, tap RESET)…'; while ! dfu-util -l 2>&1 | grep -q 'Found DFU:.*0483:df11'; do sleep 0.5; done; echo 'DFU device found'; make clean; DEBUG=1 make; make program-dfu",
+			"isBackground": false
+		}
+	],
+	"version": "2.0.0"
 }
