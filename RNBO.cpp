@@ -1,4 +1,6 @@
 #include "daisy_pod.h"
+#include "util/CpuLoadMeter.h"
+#include "sys/system.h"
 #include "tlsf.h"
 #include "ff.h" // FatFS
 
@@ -49,6 +51,22 @@ using namespace daisy;
 DaisyPod hw;
 MidiUsbHandler midi;
 
+CpuLoadMeter cpuMeter;
+
+// Small helpers for sending MIDI CC debug values
+static inline uint8_t ClampCC(int v) { return (uint8_t)(v < 0 ? 0 : (v > 127 ? 127 : v)); }
+static inline uint8_t Map01ToCC(float x)
+{
+	if (!(x == x)) return 0; // NaN guard
+	int v = (int)(x * 127.0f + 0.5f);
+	return ClampCC(v);
+}
+static inline void SendCC(uint8_t cc, uint8_t val, uint8_t channel = 0)
+{
+	uint8_t msg[3] = {(uint8_t)(0xB0 | channel), cc, val};
+	midi.SendMessage(msg, 3);
+}
+
 SdmmcHandler   sdcard;
 FatFSInterface fsi;
 
@@ -83,8 +101,10 @@ void HandleMidiMessage(const MidiEvent& m)
 
 void AudioCallback(AudioHandle::InputBuffer in, AudioHandle::OutputBuffer out, size_t size)
 {
-	// Keep audio callback lean: process RNBO only
+	// Keep audio callback lean: measure CPU and process RNBO only
+	cpuMeter.OnBlockStart();
 	rnbo.process(in, 2, out, 2, size);
+	cpuMeter.OnBlockEnd();
 }
 
 // SD WAV (PCM16) async loader: decodes to planar float32 for RNBO buffer~
@@ -97,6 +117,7 @@ namespace {
 	struct AsyncLoader {
 		FIL f{}; bool open = false; bool done = false; bool failed = false;
 		uint32_t dataBytes = 0; // WAV bytes remaining
+		uint32_t totalBytes = 0; // total WAV payload bytes (for progress)
 		int channels = 0; int sampleRate = 0; size_t frames = 0;
 		float* buf = nullptr; size_t writeFrames = 0; // planar frames written
 		uint8_t tmp[2048];
@@ -104,7 +125,7 @@ namespace {
 		void Reset() {
 			if (open) { f_close(&f); open = false; }
 			done = false; failed = false;
-			dataBytes = 0;
+			dataBytes = 0; totalBytes = 0;
 			channels = sampleRate = 0; frames = 0; writeFrames = 0;
 			if (buf) { RNBO::Platform::free(buf); buf = nullptr; }
 		}
@@ -140,7 +161,7 @@ namespace {
 				channels = ch; sampleRate = (int)sr; frames = (size_t)(dbytes / 2) / (size_t)ch;
 				// Allocate planar: [ch0..frames][ch1..frames] ...
 				buf = (float*)RNBO::Platform::malloc(frames * (size_t)ch * sizeof(float)); if (!buf) { failed = true; return false; }
-				dataBytes = dbytes; f_lseek(&f, dpos); return true;
+				dataBytes = dbytes; totalBytes = dbytes; f_lseek(&f, dpos); return true;
 			}
 			failed = true; return false;
 		}
@@ -210,6 +231,9 @@ int main(void)
 	// with a fixed audio vector size matching the one you are using
 	rnbo.prepareToProcess(kSampleRateHz, kBlockSize, true);
 
+	// CPU load meter for telemetry
+	cpuMeter.Init((float)kSampleRateHz, (int)kBlockSize, 1.0f);
+
 
 	// Start audio first so MIDI works immediately
 	hw.StartAudio(AudioCallback);
@@ -229,6 +253,15 @@ int main(void)
 			g_loader.Begin(name);
 		}
 	}
+
+	// MIDI CC telemetry timers
+	constexpr uint8_t kCpuCcNumber  = 16;
+	constexpr uint8_t kProgCcNumber = 17; // loader progress
+	constexpr uint8_t kBeatCcNumber = 20; // heartbeat
+	constexpr uint8_t kMidiChannel  = 0;  // Channel 1
+	uint32_t          nextCpuMs     = System::GetNow() + 100;
+	uint32_t          nextBeatMs    = System::GetNow() + 500;
+	uint8_t           beatVal       = 0; // toggles 0/127
 
 	for (;;)
 	{
@@ -258,6 +291,33 @@ int main(void)
 					g_loader.buf = nullptr; // ownership transferred
 				}
 			}
+		}
+
+		// Send CPU load as CC16 at ~10Hz
+		const uint32_t now = System::GetNow();
+		if ((int32_t)(now - nextCpuMs) >= 0)
+		{
+			const float avg = cpuMeter.GetAvgCpuLoad(); // 0..1 or NaN before first block
+			if (avg == avg) // check for NaN
+			{
+				SendCC(kCpuCcNumber, Map01ToCC(avg), kMidiChannel);
+			}
+			nextCpuMs += 100; // schedule next
+		}
+
+		// Send loader progress on CC17 while loading (0..127)
+		if (!g_loader.done && !g_loader.failed && g_loader.totalBytes > 0)
+		{
+			float p = 1.0f - (float)g_loader.dataBytes / (float)g_loader.totalBytes;
+			SendCC(kProgCcNumber, Map01ToCC(p), kMidiChannel);
+		}
+
+		// 2Hz heartbeat on CC20 (0/127)
+		if ((int32_t)(now - nextBeatMs) >= 0)
+		{
+			beatVal = beatVal ? 0 : 127;
+			SendCC(kBeatCcNumber, beatVal, kMidiChannel);
+			nextBeatMs += 500;
 		}
 
 	}
